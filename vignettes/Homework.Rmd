@@ -1,0 +1,1847 @@
+---
+title: "Homework"
+author: "Li Feng"
+date: "2023/12/8"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Homework}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# 2023/09/11
+
+## Question
+
+使用Knitr生成三个例子，每个例子需要包含文本以及图片或表格，附带一些公式。
+
+## Answer
+
+### Example 1
+
+鸢尾花数据集是分类方法文献中最早使用的数据集之一，并广泛用于统计和机器学习。该数据集包含3个类，每个类有50个实例，每个类代表一种鸢尾花。下面查看一下鸢尾花数据集的详细信息：
+
+```{r}
+data <- iris
+summary(data)
+```
+
+下面以长度为横坐标、长度为纵坐标，不同种类用不同的颜色画一幅散点图：
+
+```{r plot}
+# par(pin=c(3,2))
+plot(data$Sepal.Length, data$Sepal.Width, col=data$Species, xlab = "Sepal Length(cm)", ylab = "Sepal Width(cm)", main="Three Classes of Iris")
+```
+
+图中每个空心圆点表示一个样本，一共有黑色、红色、绿色三个种类的样本，横坐标表示花瓣长度，纵坐标表示花瓣宽度。
+
+### Example 2
+
+线性回归是一种通过线性模型来拟合样本的属性与标记的方法。对于数据集$D = \{(x_1,y_1),(x_2,y_2),\ldots,(x_n,y_n)\}$，线性回归希望得到
+
+$$
+f(x_i) = wx_i+b,其中f(x_i) \simeq y_i.
+$$
+
+确定$w$和$b$的方式就是最小化如下的损失函数
+
+$$
+L(w,b)= \sum_{i=1}^n(f(x_i)-y_i)^2
+$$ 下面对一组身高体重数据集进行回归
+
+```{r echo=FALSE}
+height <- c(151, 174, 138, 186, 128, 136, 179, 163, 152, 131)
+weight <- c(63, 81, 56, 91, 47, 57, 76, 72, 62, 48)
+data = data.frame(Height = height, Weight = weight)
+knitr::kable(data, format = "markdown", align = "c")
+```
+
+最终得到的线性回归模型如图所示
+
+```{r echo=FALSE}
+regression <- lm(height~weight)
+plot(weight,height, main = "Height & Weight Regression", xlab = "Weight(Kg)",ylab = "Height(cm)")
+abline(regression, col = "blue")
+```
+
+### Example 3
+
+K-means是一种常用的聚类算法，它的算法步骤为：
+
+1. 初始化：选择初始化的k个样本作为初始的中心；
+2. 迭代：
+  - 对于每个样本，计算它到k个中心的距离，并把它划分到距离最小的中心所对应的类中；
+  - 对于每个类，重新计算中心。
+3. 当每个样本所属的类不再发生改变时定制迭代。
+
+下面随机生成100个样本：
+
+```{r echo=FALSE}
+set.seed(123)
+data <- data.frame(
+  x = c(rnorm(50, mean = 0), rnorm(50, mean = 4)),
+  y = c(rnorm(50, mean = 0), rnorm(50, mean = 4))
+)
+plot(data, main = "100 Samples")
+```
+
+聚类结果如下
+
+```{r echo=FALSE}
+kmeans_result <- kmeans(data, centers = 2)
+plot(data, col = kmeans_result$cluster, main = "Result of K-means")
+points(kmeans_result$centers, col = 1:3, pch = 8, cex = 2)
+```
+
+
+
+# 2023/09/18
+
+## Question
+
+1.  使用逆变换方法实现函数`sample()`的部分功能，其中参数`replace=TRUE`。
+2.  标准Laplace分布的密度函数为$f(s) = \frac{1}{2}e^{-\vert x \vert}$，$x\in \mathbb{R}$。使用逆变换生成1000次这个分布的采样，并将生成的采样和目标分布进行比较。
+3.  使用acceptance-rejection method写一个函数，从$Beta(a, b)$分布中随机采样n次。举例从$Beta(3, 2)$中随机采样1000次。画出采样的
+直方图，并在上面加上$Beta(3,2)$的概率密度函数。
+4. 生成密度函数
+$$
+f_e(x) = \frac{3}{4}(1-x^2), \quad \vert x \vert \le1.
+$$
+使用如下算法：生成iid的$U_1,U_2,U_3~U(-1, 1)$。如果$\vert U_3 \vert \geq \vert U_2 \vert$并且$\vert U_3 \vert \geq \vert U_1 \vert$，则取$\vert U_2 \vert$；否则取$\vert U_3 \vert$。写一个函数生成$f_e$的随机变量，并画直方图。
+
+5. 证明上一问中的算法。
+
+## Answer
+
+### 1 逆变换复现`sample()`
+
+**Usage**
+
+`Mysample(x, size, prob=Null)`
+
+**Description**
+
+`Mysample`从区间`x`中有放回地采样个数为`size`的样本。
+
+`x`：采样区间；
+
+`size`：采样个数。
+
+`prob`：概率，默认等概率，可以输入想要的概率。
+
+函数定义如下
+
+```{r}
+Mysample <- function(x, size, prob=NULL){
+  n <- length(x) # 获取区间x中的元素个数
+  if (is.null(prob)) {
+    p <- rep(1/n, n) # 如果prob为空，所有样本概率相同
+  }
+  cp <- cumsum(prob)
+  U <- runif(size)
+  r <- x[findInterval(U, cp)+1]
+  return(r)
+}
+```
+
+**Examples**
+
+从{0，1}中采样10次
+
+```{r}
+Mysample(0:1, 10)
+```
+
+从{2,5,8,9}中采样1000次
+
+```{r}
+r <- Mysample(c(2, 5, 8, 9), 1000, prob = c(.2, .3, .4, .1))
+barplot(table(r))
+```
+
+### 2 标准Laplace分布
+
+标准Laplace分布的概率密度函数$f(x) = \frac{1}{2}e^{-\vert x \vert}$，可以得到其分布函数为
+
+$$
+F_X(x) =
+\begin{cases}
+  \frac{1}{2}e^x & \text{if } x \leq 0 \\
+  1-\frac{1}{2}e^{-x} & \text{if } x > 0
+\end{cases}
+$$ 求其逆函数可以得到
+
+$$
+F_X^{-1}(u) =
+\begin{cases}
+  \log{2u} & \text{if } u \leq \frac{1}{2} \\
+  -\log{2(1-u)} & \text{if } u > \frac{1}{2}
+\end{cases}
+$$
+
+这个分段函数可以用一个符号函数$sign()$合并
+
+$$
+F_X^{-1}(u) = sign(\frac{1}{2}-u)log(1-\vert 2u-1 \vert)
+$$
+
+编程实现如下，并用直方图和原分布做比较
+
+```{r}
+n <- 1e4
+u <- runif(n)
+r = sign(0.5-u)*log(1-abs(2*u-1))
+hist(r, prob=TRUE, ylim=c(0, 0.55), main=expression(f(x)==frac(1,2)*e^-abs(x)))
+y <- seq(-5, 5, .01)
+lines(y, 0.5*exp(-abs(y)))
+```
+
+### 3 Beta分布
+
+$Beta(a, b)$分布的概率密度函数为$f(x; a, b) = \frac{x^{a - 1} (1 - x)^{b - 1}}{B(a, b)}$。另$g(x)～U(0,1)$。可以直接另$c=\frac{1}{B(a,b)}$，但这不是$c$的最小取值，为找到$c$的最小取值，可以通过求$f
+(x;a,b)$的最大值得到。由于$f(x;a,b)$在$(0,1)$上只有一个极值点，且是极大值点，所以直接求其极值点即可。
+
+$$
+\frac{df}{dx}=\frac{1}{B(a,b)}[(a-1)x^{a-2}(1-x)^{b-1}-(b-1)x^{a-1}(1-x)^{b-2}]=0 \\
+x = \frac{a-1}{a+b-2}
+$$
+所以当$x= \frac{a-1}{a+b-2}$时，可以得到最大值$f_{max}(x;a,b)=\frac{1}{B(a,b)}(\frac{a-1}{a+b-2})^{a-1}(1-\frac{a-1}{a+b-2})^{b-1}$，另$c=f_{max}(x;a,b)$可以使计算效率最高。
+
+下面给出用acceptance-rejection method进行Beta分布采样的函数
+
+```{r}
+myBeta <- function(a, b, n){
+  t = (a-1)/(a+b-2)
+  c = 1/beta(a, b)*t**(a-1)*(1-t)**(b-1)
+  k <- 0
+  j <- 0
+  y <- numeric(n)
+  while(k<n){
+    u1 <- runif(1)
+    u2 <- runif(1)
+    j <- j + 1
+    if (dbeta(u2, a, b) > u1){
+      k <- k+1
+      y[k] <- u2
+    }
+  }
+  out <- list(y = y, j = j, c = c)
+  return(out)
+}
+```
+
+下面对$Beta(3,2)$进行1000次采样，并绘制直方图
+```{r}
+out = myBeta(3, 2, 1000)
+cat("iterations: ", out$j)
+```
+
+采样1000个变量总共只迭代了这么多次，效率很高。
+
+```{r}
+x <- out$y
+hist(x, prob=TRUE, ylim=c(0, out$c), main="Beta(2,3)")
+y <- seq(0, 1, .001)
+lines(y, dbeta(y, 3, 2))
+```
+
+### 3 $f_e$
+
+算法编程如下
+```{r}
+myfe <- function(n){
+  k <- 0
+  y <- numeric(n)
+  while(k<n){
+    u1 <- runif(1, -1, 1)
+    u2 <- runif(1, -1, 1)
+    u3 <- runif(1, -1, 1)
+    if ((abs(u3)>abs(u2) || abs(u3)== abs(u2)) && (abs(u3)>abs(u1) || abs(u3)== abs(u1))){
+      k <- k + 1
+      y[k] <- u2
+    } else {
+      k <- k + 1
+      y[k] <- u3
+    }
+  }
+  return(y)
+}
+```
+
+采样100000次，结果的直方图和原密度函数比较如下
+
+```{r}
+y <- myfe(1e5)
+hist(y, prob = TRUE, main=expression(f[e](x)==frac(3,4)(1-x^2)))
+x<- seq(-1, 1, .01)
+lines(x, 0.75 * (1 - x**2))
+```
+
+### 5 证明算法
+
+要证明该算法，只需证明该算法得到的概率分布函数和原概率分布函数相同即可。
+
+原概率分布函数为
+
+$$
+F_X(x)=\int_{-1}^{x}\frac{3}{4}(1-x^2)dx=-\frac{1}{4}x^3+\frac{3}{4}x+\frac{1}{2}
+$$
+下面计算由该算法得到分布函数，由算法可以得到，分布函数可以分为两部分
+$$
+\begin{align}
+   F_U(x)&=P(U\leq x)\\
+   &=P(U_2\leq x|U=U_2)P(U=U_2)+P(U_3\leq x|U=U_3)P(U=U_3)\\
+   &=P(U_2\leq x,U=U_2)+P(U_3\leq x,U=U_3)
+\end{align}
+$$
+记$F_1(x) =P(U_2\leq x,U=U_2),F_2(x)= P(U_3\leq x,U=U_3)$，分别进行计算。由于$U_1, U_2,U_3$是iid的，所以可以得到
+$$
+f(u_1, u_2, u_3) =f(u_1)f(u_2)f(u_3)
+$$
+
+首先计算$-1\leq x <0$时的情况
+
+
+$$
+\begin{align}
+  F_1(x) &= \int_{-1}^{x}\int_{u_3}^{x}\int_{u_3}^{-u_3} f(u_1)f(u_2)f(u_3)du_1du_2du_3
+  +\int_{-x}^{1}\int_{-u_3}^{x}\int_{-u_3}^{u_3} f(u_1)f(u_2)f(u_3)du_1du_2du_3\\
+  &=-\frac{1}{12}x^3+\frac{1}{4}x+\frac{1}{6}
+\end{align}
+$$
+$$
+\begin{align}
+F_2(x)&= 4[\int_{-1}^{x}\int_{-1}^{u_3}f(u_1)f(u_3)du_1du_3]-4[\int_{-1}^{x}\int_{-1}^{u_3}\int_{-1}^{u_3} f(u_1)f(u_2)f(u_3)du_1du_2du_3]\\
+&=-\frac{1}{6}x^3+\frac{1}{2}x+\frac{1}{3}
+\end{align}
+$$
+因此可以得到，当$-1\leq x <0$时，有
+$$
+F_U(x)=F_1(x)+F_2(x)=-\frac{1}{4}x^3+\frac{3}{4}x+\frac{1}{2}=F_X(x)
+$$
+通过计算可以得到，$0\leq x \leq 1$的情况与$-1\leq x <0$是对称的，也有
+$$
+F_U(x)=F_X(x)
+$$
+得证。
+
+
+# 2023/09/25
+
+## Question
+
+1.  证明当$\rho =\frac{l}{d}$取何值时，$\hat{\pi}$的渐进方差最小? ($m ∼ B(n,p)$, 使用$\delta$法)
+
+2.  取三个不同的$\rho$值($0 \leq \rho \leq 1$, 包含$\rho_{min}$)然后使用Monte Carlo模拟来验证你的答案。 ($n = 10^6$, 重复模拟次数$K = 100$)
+
+3.  在例子5.7中， 举了下面一个Monte Carlo积分的例子来说明control variate逼近方法 $$
+    \theta = \int_0^1 e^xdx.
+    $$ 现在考虑使用antithetic variate逼近。计算$Cov(e^U,e^{1−U})$和$Var(e^U + e^{1−U})$，其中$U$∼Uniform(0,1)。使用antithetic variate逼近可以让$\hat{\theta}$的方差下降百分之多少（与简单的MC相比）？
+
+4.  联系上一问。使用Monte Carlo模拟来估计$\theta$，分别通过antithetic variate逼近和简单的Monte Carlo模拟方法。计算使用antithetic variate时， 方差减少百分比的经验估计。将结果与上一问中的理论值相比较。
+
+## Answer
+
+### 1
+
+证明. 首先，我们有概率$p$的表达式
+
+$$
+p = \frac{2l}{\pi d}=\frac{2\rho}{\pi}.
+$$
+
+通过$\hat{p} = m/n$可以得到随机变量$\hat{\pi}$与随机变量$m$之间的关系为
+
+$$
+\hat{\pi} = \frac{2\rho}{\hat{p}}=\frac{2\rho n}{m}=f(m).
+$$
+由于$m$~$B(n,p)$，我们可以得到
+
+$$
+\mu = E(m) = np,\\
+\sigma^2= D(m) = np(1-p).
+$$
+
+根据$\delta$法，可以得到$\hat{\pi}$的近似方差为
+
+$$
+\begin{align}
+D(\hat{\pi}) & \approx [f'(\mu)]^2\sigma^2\\
+&=\frac{4\rho^2n^2}{n^4p^4}np(1-p)\\
+&=\frac{4\rho^2(1-p)}{np^3},
+\end{align}
+$$
+
+代入$p = \frac{2l}{\pi d}$可以得到
+
+$$
+D(\hat{\pi}) \approx \frac{\pi^3}{2n}(\frac{1}{\rho}-\frac{2}{\pi}).
+$$
+
+当$0\leq \rho \leq 1$时，该式关于$\rho$是递减的，所以$\rho_{min}=1$时，$\hat{\pi}$的渐进方差最小。
+
+### 2
+
+分别取$\rho = 0.5$，$\rho = 0.8$和$\rho = 1$，计算$\hat{\pi}$的方差。
+
+```{r}
+n <- 10^6 # 试验次数
+K <- 100 # 模拟次数
+rhos <- c(0.5, 0.8, 1) # rho的取值
+for (rho in rhos){
+  m <- rbinom(K, n, 2*rho/pi) # 以2*rho/pi的概率生成随机数
+  pi_hat <- 2*rho*n/m # 计算pi_hat
+  D = var(pi_hat) # 计算方差
+  cat("rho =", rho,"    variance =", D, "\n")
+}
+```
+
+可以看到，当$\rho = 1$时的方差时最小的。
+
+### 3
+
+先计算$Cov(e^U,e^{1-U})$，
+
+$$
+\begin{align}
+  Cov(e^U,e^{1-U}) &= E(e^Ue^{1-U})-E(e^U)E(e^{1-U}) \\
+  & = e - (e-1)^2 .
+\end{align}
+$$
+
+下面计算$Var(e^U+e^{1-U})$，
+
+$$
+Var(e^U) = E(e^{2U}) - [E(e^U)]^2 = \frac{e^2-1}{2}-(e-1)^2,
+$$
+
+$$
+\begin{align}
+  Var(e^{1-U}) &= E(e^{2-2U}) - [E(e^{1-U})]^2\\
+  & = -\frac{1-e^2}{2}-(e-1)^2,
+\end{align}
+$$
+
+$$
+\begin{align}
+Var(e^U+e^{1-U})& = Var(e^U)+Var(e^{1-U})+Cov(e^U,e^{1-U}) \\
+& = \frac{e^2-1}{2}-(e-1)^2-\frac{1-e^2}{2}-(e-1)^2+2e - 2(e-1)^2  \\
+&= -3e^2+10e-5.
+\end{align}
+$$
+
+下面来计算方差减少的百分比
+
+$$
+Var(\hat{\theta}) = \frac{1}{m}Var(e^U),\\
+\hat{\theta}' = \frac{1}{m}\sum_{j=1}^{m/2}(e^{U_j}+e^{1-U_j}),\\
+Var(\hat{\theta}') = \frac{1}{2m}Var(e^U+e^{1-U}).
+$$
+
+所以
+
+$$
+1-\frac{Var(\hat{\theta}')}{Var(\hat{\theta})} = 1-\frac{\frac{1}{2}(-3e^2+10e-5)}{\frac{e^2-1}{2}-(e-1)^2} = 0.9676701,
+$$
+
+因此使用antithetic variate逼近可以让$\hat{\theta}$的方差下降96.77%。
+
+### 4
+
+分别通过antithetic variate逼近和简单的Monte Carlo模拟方法来估计$\theta$，模拟$10^6$次，每次采样100次。
+
+```{r}
+K = 10^6 # 模拟次数
+n = 100 # 采样次数
+MC1 = numeric(K)
+MC2 = numeric(K)
+for (i in 1:K){
+  u = runif(n/2)
+  v = runif(n/2)
+  MC1[i] = mean(exp(c(u,v)))
+  MC2[i] = mean(exp(c(u, 1-u)))
+}
+theta1 = mean(MC1)
+theta2 = mean(MC2)
+var1 = var(MC1)
+var2 = var(MC2)
+cat("theta1:",theta1,"\ntheta2:",theta2,"\nvariance reduction:", 1-var2/var1)
+```
+
+两种方法模拟估计的$\hat{\theta}$都和真实值接近，方差减少的百分比和上一问得到的理论值非常接近。
+
+# 2023/10/09
+
+## Question
+
+1.
+
+
+$Var(\hat{\theta}{}^M)= \frac{1}{Mk}\sum_{i=1}^{k}\sigma_i^2+\frac{1}{M}Var(\theta_I)=Var(\hat{\theta}{}^S)+\frac{1}{M}Var(\theta_I)$, where $\theta_i = E[g(U)|I=i]$, $\sigma_i^2 = Var[g(U)|I=i]$ and $I$ takes uniform distribution over ${1,\ldots,k}$.
+
+Proof that if $g$ is a continuous function over $a, b$, then $Var(\hat{\theta}{}^S)/Var(\hat{\theta}{}^M) \to 0$ as $b_i-a_i \to 0$ for all $i=1,\ldots,k$.
+
+2.
+
+-   Exercises 5.13, 5.14, 5.15 (pages 149-151, Statistical Computing with R).
+-   Exercises 6.5, 6.A (pages 180-181, Statistical Computing with R).
+
+## Answer
+
+### 1
+
+证明.
+
+$$
+\begin{aligned}
+\frac{Var(\hat{\theta}{}^S)}{Var(\hat{\theta}{}^M)} & = \frac{\frac{1}{Mk}\sum_{i=1}^{k}\sigma_i^2}{\frac{1}{Mk}\sum_{i=1}^{k}\sigma_i^2+\frac{1}{M}Var(\theta_I)}\\
+&=\frac{1}{1+ \frac{Var(\theta_I)}{\frac{1}{k}\sum_{i=1}^{k}\sigma_i^2}},
+\end{aligned}
+$$
+当$b_i-a_i \to 0$时，$\theta_I \to g(U)$，则$Var(\theta_i) \to Var(g(U))$。由于$g$是连续的，可以得到$Var(g(U))<\infty$。下面再看分母$\frac{1}{k}\sum_{i=1}^{k}\sigma_i^2$,将其写成积分的形式
+
+$$
+\begin{aligned}
+\frac{1}{k}\sum_{i=1}^{k}\sigma_i^2 &= \frac{1}{k}\sum_{i=1}^{k} \int_{a_i}^{b_i}[g(u)-\theta_i]^2\frac{1}{b_i-a_i}du.
+\end{aligned}
+$$
+
+我们令
+
+$$
+d_i = g_{max}(u)-g_{min}(u),\\
+u \in [a_i, b_i],
+$$
+
+显然，$[g(u)-\theta_i]^2 \leq d_i^2$，所以
+
+$$
+\begin{aligned}
+\frac{1}{k}\sum_{i=1}^{k}\sigma_i^2 & < \frac{1}{k}\sum_{i=1}^{k} \int_{a_i}^{b_i}d_i^2\frac{1}{b_i-a_i}du\\
+& = \frac{1}{k}\sum_{i=1}^{k} (b_i-a_i)d_i^2\frac{1}{b_i-a_i}\\
+& =\frac{1}{k}\sum_{i=1}^{k}d_i^2,
+\end{aligned}
+$$
+
+我们令
+
+$$
+d_{max} = \max_i{d_i}, \qquad
+i  = 1, 2, \ldots, k,
+$$
+可以得到
+
+$$
+\frac{1}{k}\sum_{i=1}^{k}\sigma_i^2<\frac{1}{k}\sum_{i=1}^{k}d_i^2<\frac{1}{k}kd_{max}^2 = d_{max}^2
+$$
+
+由于$g$是连续的，当$b_i-a_i \to 0$时，$d_{max}^2 \to 0$,即
+
+$$
+\frac{1}{k}\sum_{i=1}^{k}\sigma_i^2 \to 0 \quad (b_i-a_i \to 0).
+$$
+
+综上，可以得到
+
+$$
+\frac{Var(\hat{\theta}{}^S)}{Var(\hat{\theta}{}^M)} =\frac{1}{1+ \frac{Var(\theta_I)}{\frac{1}{k}\sum_{i=1}^{k}\sigma_i^2}} \to 0 \quad (b_i-a_i \to 0).
+$$
+
+得证。
+
+### 5.13
+
+两个重要性函数分别为
+
+$$
+f_1(x) = \frac{1}{\sqrt{2\pi}}e^{-\frac{x^2}{2}},\\
+f_2(x) = e^{-x}.
+$$
+
+使用Monte Carlo方法来估计方差
+
+```{r}
+m <- 1e4
+theta.hat <- var.hat <- numeric(2)
+g <- function(x){
+  x^2/sqrt(2*pi)*exp(-x^2/2)*(x>1)
+}
+
+x <- rnorm(m) # f1
+fg <- g(x) / dnorm(x)
+theta.hat[1] <- mean(fg)
+var.hat[1] <- var(fg)
+
+x <- rexp(m, 1) # f2
+fg <- g(x) * exp(x)
+theta.hat[2] <- mean(fg)
+var.hat[2] <- var(fg)
+
+rbind(theta.hat, var.hat)
+```
+
+通过Monte Carlo模拟，可以看到使用$f_2$进行重要性采样的方差更小。
+
+### 5.14
+
+使用如下函数来进行重要性采样
+
+$$
+f(x) = \frac{1}{\sqrt{2\pi}}e^{-\frac{(x-1.5)^2}{2}}
+$$
+
+```{r}
+m <- 1e4
+g <- function(x){
+  x^2/sqrt(2*pi)*exp(-x^2/2)*(x>1)
+}
+
+x <- rnorm(m, mean=1.5) # 设置正太分布的均值为1.5
+fg <- g(x) / dnorm(x, mean=1.5)
+theta.hat <- mean(fg)
+se <- sd(fg)
+
+rbind(theta.hat, se)
+```
+
+最终得到该积分的估计值$\hat{\theta}$=`r theta.hat`，估计标准差为`r se`。
+
+### 5.15
+
+在分层采样中，保持和Example5.10的总采样次数一致，都为1000次，估计的次数为50次，每次估计中将积分区间划分为5层。
+
+```{r}
+M <- 10000 # 总采样次数
+k <- 5 # 层数
+E <- numeric(k) # 保存每次中每层的均值
+N = 50 # 估计次数
+r <- M/k/N
+est = numeric(N) # 保存每次估计的均值
+
+g<-function(x){
+  exp(-x)/(1+x^2)*(x>0)*(x<1)
+}
+
+for(i in 1:N){
+  for(j in 1:k){
+    E[j]<-mean(g(runif(r,(j-1)/k,j/k)))
+  }
+  est[i] = mean(E)
+}
+theta.hat = mean(est)
+se = sd(est)
+
+rbind(theta.hat, se)
+```
+
+最终得到估计值$\hat{\theta}$=`r theta.hat`，估计标准差为`r se`。而Example5.10中最小的估计标准差为0.097，分层采样很容易就得到了更小的标准差。
+
+### 6.5
+
+令
+
+$$
+P(a\leq \frac{\sqrt{n}(\bar{X}-\mu)}{S}\leq b)=1-\alpha,\\
+\frac{\sqrt{n}(\bar{X}-\mu)}{S}~t(n-1),
+$$
+
+可以得到均值$\mu$的双侧$1-\alpha$置信区间为
+
+$$
+[\bar{X}-t_{1-\frac{\alpha}{2}}\frac{S}{\sqrt{n}},\bar{X}+t_{1-\frac{\alpha}{2}}\frac{S}{\sqrt{n}}].
+$$ 下面从分布$\chi^2(2)$中随机采样，并用Monte Carlo实验来估计t-置信区间的覆盖率。
+
+```{r}
+n <- 20
+alpha <- .05
+calcCI <- function(n, alpha){
+  y <- rchisq(n, df = 2)
+  return(c(mean(y)-qt(1-alpha/2, df=n-1)*sd(y)/sqrt(n), mean(y)+qt(1-alpha/2, df=n-1)*sd(y)/sqrt(n)))
+}
+
+CL <- replicate(1000, expr = calcCI(n=n, alpha=alpha))
+rate = mean((CL[1,]<2)*(CL[2,]>2))
+print(rate)
+```
+
+最终得到置信区间的覆盖率为`r rate*100`\%。和Example6.4相比，在分布$\chi^2(2)$中随机采样时，直接使用正态分布的置信区间，对均值的覆盖率会偏小。
+
+### 6.A
+
+```{r}
+n <- 20
+alpha <- .05
+mu0 <- 1
+
+m <- 10000
+p <- matrix(0, 3, m)
+
+for (j in 1:m) {
+  x <- rchisq(n, df=1) # X^2(1)
+  ttest <- t.test(x, alternative = "two.sided", mu = mu0)
+  p[1, ] <- ttest$p.value
+
+  x <- runif(n, 0, 2) # U(0, 2)
+  ttest <- t.test(x, alternative = "two.sided", mu = mu0)
+  p[2, ] <- ttest$p.value
+
+  x <- rexp(n, 1) # Exponential(1)
+  ttest <- t.test(x, alternative = "two.sided", mu = mu0)
+  p[3, ] <- ttest$p.value
+}
+
+p.hat <- apply(p<alpha, 1, mean)
+se.hat <- sqrt(p.hat * (1 - p.hat) / m)
+table = data.frame(
+  p.hat = p.hat,
+  se.hat = se.hat,
+  row.names=c("X^2(1)", "U(0, 2)", "Exponential(1)")
+)
+print(table)
+```
+
+总共进行了10000次双侧t检验，每次分别从3个分布中随机采样20个样本。在$\alpha$=0.05的情况下，$\chi^2(1)$，$Uniform(0,2)$和$Exponential(1)$全部接受原假设$H_0$。$\chi^2(1)$、$Uniform(0,2)$和$Exponential(1)$的经验$T1e$比例为0%，标准差为0。
+
+
+# 2023/10/16
+
+## Question
+
+1.  考虑$m=1000$个假设，其中前95%个原假设成立，后5%个对立假设成立。在原假设之下，p值服从U(0,1)分布，在对立假设之下，p值服从Beta(0.1, 1)分布（可用rbeta生成）。应用Bonferroni校正与B-H校正应用于生成的m个p值（独立）（应用p.adjust），得到校正后的p值，与$\alpha$=0.1比较确定是否拒绝原假设。基于M=1000次模拟，可估计FWER，FDR，TPR输出到表格中。
+
+2.  Suppose the population has the exponential distribution with rate $\lambda$, then the MLE of $\lambda$ is $\hat{\lambda}=1/\bar{X}$, where $\bar{X}$ is the sample mean. It can be derived that the expectation of $\hat{\lambda}$ is $\lambda n/(n-1)$, so that the estimation bias is $\lambda/(n-1)$. The standard error $\hat{\lambda}$ is $\lambda n/[(n-1)\sqrt{n-2}]$. Conduct a simulation study to verify the performance of the boostrap method.
+
+-   The true value of $\lambda$=2.
+-   The sample size n=51020.
+-   The number of bootstrap replicates B=1000.
+-   The simulations are repeated for m=1000 times.
+-   Compare the mean bootstrap bias and bootstrap standard error with the theoretical ones. Comment on the results.
+
+3.  Exercises 7.3 (pages 212, Statistical Computing with R).
+
+## Answer
+
+### 1
+
+```{r}
+M = 1000
+m = 1000
+alpha = 0.1
+
+result_bfn <- result_bh <- matrix(0,M,3)
+
+for (i in 1:M){
+  set.seed(1000+i)
+  # 对立假设成立为1， 原假设成立为0
+  # 拒绝原假设为1，不拒绝原假设为0
+  label_true <- c(rep(FALSE, 0.95*m), rep(TRUE, 0.05*m))
+  p = c(runif(0.95*m, 0, 1), rbeta(0.05*m, 0.1, 1))
+
+  # 校正
+  p.bfn = p.adjust(p,method='bonferroni')
+  p.bh = p.adjust(p,method='BH')
+  # 获取检验结果
+  label_bfn <- p.bfn < alpha
+  label_bh <- p.bh < alpha
+  # 构造混淆矩阵
+  confusion_bfn <- table(Predicted = label_bfn, Actual = label_true)
+  confusion_bh <- table(Predicted = label_bh, Actual = label_true)
+  result_bfn[i, ] <- c(confusion_bfn[2,1]>0, confusion_bfn[2,1]/sum(confusion_bfn[2, ]), confusion_bh[2,2]/sum(confusion_bfn[, 2]))
+  result_bh[i, ] <- c(confusion_bh[2,1]>0, confusion_bh[2,1]/sum(confusion_bh[2, ]), confusion_bh[2,2]/sum(confusion_bh[, 2]))
+}
+
+table = data.frame(
+  Bonferroni = colMeans(result_bfn),
+  B.H = colMeans(result_bh),
+  row.names = c("FWER", "FDR", "TPR")
+)
+
+print(t(table))
+```
+
+### 2
+
+```{r}
+library(boot)
+sample_size = c(5, 10, 20) # 采样个数
+B = 1000 # bootstrap重复次数
+m = 1000 # 模拟次数
+
+# 计算lambda的估计值
+b.lambda <- function(x, i){
+  1/mean(x[i])
+}
+
+total = matrix(0, 3, 2) # 记录bootstrap估计值
+for (i in 1:3){
+  n = sample_size[i]
+  matrix_temp = matrix(0, 1000, 2)
+  for (m in 1:1000){
+    x = rexp(n, 2)
+    obj <- boot(data=x, statistic = b.lambda, R=1000)
+    matrix_temp[m, ] <- c(mean(obj$t)-obj$t0, sd(obj$t))
+  }
+  total[i, ] <- colMeans(matrix_temp)
+}
+
+table = data.frame(
+  bias.bootstrap = total[, 1],
+  bias.theoretical = 2/(sample_size-1),
+  se.bootstrap = total[, 2],
+  se.theoretical = 2*sample_size/((sample_size-1)*sqrt(sample_size-2)),
+  row.names = sample_size
+)
+print(table)
+```
+
+可以看到bootstrap得到的估计值随着采样个数的增加，和理论值越来越接近。
+
+
+### 3
+
+```{r}
+library(bootstrap)
+library(boot)
+
+boot.t.ci <- function(x, B = 500, R = 100, level = .95, statistic){
+  # 计算bootstrap的t置信区间
+  x <- as.matrix(x); n <- nrow(x)
+  stat <- numeric(B); se <- numeric(B)
+  boot.se <- function(x, R, f) {
+    #计算bootstrap的估计标准差，f是统计量
+    x <- as.matrix(x); m <- nrow(x)
+    th <- replicate(R, expr = {
+    i <- sample(1:m, size = m, replace = TRUE)
+    f(x[i, ])
+    })
+    return(sd(th))
+  }
+  for (b in 1:B) {
+    j <- sample(1:n, size = n, replace = TRUE)
+    y <- x[j, ]
+    stat[b] <- statistic(y)
+    se[b] <- boot.se(y, R = R, f = statistic)
+  }
+  stat0 <- statistic(x)
+  t.stats <- (stat - stat0) / se
+  se0 <- sd(stat)
+  alpha <- 1 - level
+  Qt <- quantile(t.stats, c(alpha/2, 1-alpha/2), type = 1)
+  names(Qt) <- rev(names(Qt))
+  CI <- rev(stat0 - Qt * se0)
+}
+
+dat <- law # 导入数据
+
+stat <- function(dat) {
+  # 计算相关性的统计量
+  cor(dat[,1], dat[,2])
+}
+
+ci <- boot.t.ci(dat, statistic = stat, B = 2000, R = 200)
+
+print(ci)
+```
+
+最终得到t置信区间为[`r ci`]。
+
+
+# 2023/10/23
+
+## Question
+
+Exercises 7.5 7.8 7.11 (pages 212-213, Statistical Computing with R).
+
+
+
+
+## Answer
+
+### 7.5
+
+```{r}
+library(boot)
+x = c(3, 5, 7, 18, 43, 85, 91, 98, 100, 130, 230, 487)
+b.mean <- function(x,i){
+  mean(x[i])
+}
+
+obj <- boot(data=x, statistic = b.mean, R=1000)
+ci <- boot.ci(obj, type=c("norm","basic","perc","bca"), conf=0.95)
+ci
+```
+
+通过计算，可以得到standard normal, basic, percentile和BCa方法得到的置信区间如上。 可以看到，这四种方法中，BCa的区间长度是最大的；Basic的置信区间数值整体偏小。Normal与其他方法不同，是因为其假设了数据服从正态分布，但数据本身可能不是严格正态分布的。Percentile和Basic不同，是因为相比Basic，Percentile假设了样本均值和总体均值相同，样本均值和总体均值之间的实际误差是导致这两种方法不同的原因。BCa是Percentile的改进版，考虑了变换且有二阶精度。
+
+### 7.8
+
+```{r}
+library(bootstrap)
+x <- scor
+
+cov_matrix <- cov(scor, scor)
+lambda <- eigen(cov_matrix)$values
+theta <- lambda[1]/sum(lambda)
+
+n <- nrow(x)
+theta.hat <- numeric(n)
+for (i in 1:n){
+  cov.hat <- cov(x[-i,], x[-i,])
+  lambda.hat <- eigen(cov.hat)$values
+  theta.hat[i] <- lambda.hat[1]/sum(lambda.hat)
+}
+
+bias.jack = (n-1)*(mean(theta.hat)-theta)
+se.jack = sqrt((n-1)^2/n)*sd(theta.hat)
+
+c(bias.jack = bias.jack, se.jack = se.jack)
+```
+
+使用jackknife估计的偏差为`r bias.jack`，标准差为`r se.jack`。
+
+### 7.11
+
+```{r}
+library(DAAG); attach(ironslag)
+
+n <- length(magnetic) #in DAAG ironslag
+e1 <- e2 <- e3 <- e4 <- numeric(n*(n-1)/2)
+
+# for n-fold cross validation
+# fit models on leave-one-out samples
+k = 0
+for (i in 1:n-1) {
+  for (j in (i+1):n) {
+    y <- magnetic[-c(i, j)]
+    x <- chemical[-c(i, j)]
+
+    J1 <- lm(y ~ x)
+    yhat1 <- J1$coef[1] + J1$coef[2] * chemical[c(i, j)]
+    e1[k] <- mean((magnetic[c(i, j)] - yhat1)^2)
+
+    J2 <- lm(y ~ x + I(x^2))
+    yhat2 <- J2$coef[1] + J2$coef[2] * chemical[c(i, j)] +
+    J2$coef[3] * chemical[c(i, j)]^2
+    e2[k] <- mean((magnetic[c(i, j)] - yhat2)^2)
+
+    J3 <- lm(log(y) ~ x)
+    logyhat3 <- J3$coef[1] + J3$coef[2] * chemical[c(i, j)]
+    yhat3 <- exp(logyhat3)
+    e3[k] <- mean((magnetic[c(i, j)] - yhat3)^2)
+
+    J4 <- lm(log(y) ~ log(x))
+    logyhat4 <- J4$coef[1] + J4$coef[2] * log(chemical[c(i, j)])
+    yhat4 <- exp(logyhat4)
+    e4[k] <- mean((magnetic[c(i, j)] - yhat4)^2)
+
+    k = k + 1
+  }
+}
+
+table = data.frame(
+  J1 = mean(e1),
+  J2 = mean(e2),
+  J3 = mean(e3),
+  J4 = mean(e4),
+  row.names = "MSE"
+)
+
+print(table)
+```
+
+其中，Quadratic模型J1的MSE最小，Quadratic模型效果最好。Log-Log模型J4的MSE最大，效果最差。
+
+# 2023/10/30
+
+
+## Question
+
+1. Proof the Stationarity of Metropolis-Hastings sampler Algorithm in continuous situation.
+2. Exercises 8.1 8.3 (pages 242-243, Statistical Computing with R).
+
+## Answer
+
+### 1
+
+令目标分布为$f(x)$，$r$和$s$是状态空间中的两个取值。状态$r$的提议分布为$g(\cdot|r)$，接受概率为
+
+$$
+\alpha(r, s) = \min(1, \frac{f(s)g(r|s)}{f(r)g(s|r)}).
+$$
+
+则传递核为
+
+$$
+K(r, s) = \alpha(r, s)g(s|r) + I(s=r)[1-\int_{s \neq r}\alpha(r, s)g(s|r)ds].
+$$
+
+下面证明
+
+$$
+f(s)K(s, r) = f(r)K(r, s).
+$$
+
+
+先求左半边，
+
+$$
+f(r)\alpha(r, s)g(s|r) =
+\begin{cases}
+f(r)g(s|r)\frac{f(s)g(r|s)}{f(r)g(s|r)}=f(s)g(s|r), & f(r)g(s|r) \geq f(s)g(r|s)\\
+f(r)g(r|s), & f(r)g(s|r) \leq f(s)g(r|s),
+\end{cases}
+$$
+
+而从状态$s$出发可以得到
+
+$$
+f(s)\alpha(s, r)g(r|s) =
+\begin{cases}
+  f(s)g(r|s) & f(r)g(s|r) \geq f(s)g(r|s)\\
+  f(s)g(r|s)\frac{f(r)g(s|r)}{f(s)g(r|s)}=f(r)g(s|r), & f(r)g(s|r) \leq f(s)g(r|s),
+\end{cases}
+$$
+
+
+
+$$
+f(r)\alpha(r, s)g(s|r) =
+\begin{cases}
+    f(r)g(s|r)\frac{f(s)g(r|s)}{f(r)g(s|r)} = f(s)g(s|r), & \text{if } f(r)g(s|r) \geq f(s)g(r|s)\\
+    f(s)g(s|r), & \text{if } f(r)g(s|r) \leq f(s)g(r|s),
+\end{cases}
+$$
+
+所以可以得到
+
+$$
+f(s)\alpha(s, r)g(r|s) = f(r)\alpha(r, s)g(s|r).
+$$
+
+下面看右半部分，当$r = s$时，下面的等式是显然的
+
+$$
+f(r)I(s=r)[1-\int_{s \neq r}\alpha(r, s)g(s|r)ds] = f(s)I(r=s)[1-\int_{r \neq s}\alpha(s, r)g(r|s)dr].
+$$
+
+所以
+
+$$
+f(s)K(s, r) = f(r)K(r, s).
+$$
+
+证毕。
+
+
+### 8.1
+
+```{r warning=FALSE}
+rm(list = ls())
+attach(chickwts)
+x <- sort(as.vector(weight[feed == "soybean"]))
+y <- sort(as.vector(weight[feed == "linseed"]))
+detach(chickwts)
+
+w <- function(x, y){
+  ecdf1 <- ecdf(x)
+  ecdf2 <- ecdf(y)
+  n <- length(x)
+  m <- length(y)
+  sum1 = sum((ecdf1(x)-ecdf2(x))^2)
+  sum2 = sum((ecdf1(y)-ecdf2(y))^2)
+  return(m*n/(m+n)^2*(sum1+sum2))
+}
+
+R <- 999 #number of replicates
+z <- c(x, y) #pooled sample
+K <- 1:26
+D <- numeric(R) #storage for replicates
+D0 <- w(x, y)
+for (i in 1:R) {
+  #generate indices k for the first sample
+  k <- sample(K, size = 14, replace = FALSE)
+  x1 <- z[k]
+  y1 <- z[-k] #complement of x1
+  D[i] <- w(x1, y1)
+}
+p <- mean(c(D0, D) >= D0)
+p
+```
+
+最终得到的p值为`r p`，结果不显著，不拒绝soybean和linseed分布相同的假设。
+
+### 8.3
+
+```{r}
+n1 <- 20
+n2 <- 30
+mu1 <- mu2 <- 0
+sigma1 <- sigma2 <- 1
+x <- rnorm(n1, mu1, sigma1)
+y <- rnorm(n2, mu2, sigma2)
+
+count5test <- function(x, y) {
+  X <- x - mean(x)
+  Y <- y - mean(y)
+  outx <- sum(X > max(Y)) + sum(X < min(Y))
+  outy <- sum(Y > max(X)) + sum(Y < min(X))
+  return(max(c(outx, outy)))
+}
+
+R <- 999 #number of replicates
+z <- c(x, y) #pooled sample
+K <- 1:(n1+n2)
+D <- numeric(R) #storage for replicates
+D0 <- count5test(x, y)
+for (i in 1:R) {
+  #generate indices k for the first sample
+  k <- sample(K, size = n1, replace = FALSE)
+  x1 <- z[k]
+  y1 <- z[-k] #complement of x1
+  D[i] <- count5test(x1, y1)
+}
+p <- mean(c(D0, D) >= D0)
+p
+```
+
+从多次实验的结果来看，p值的非常不稳定，p值可能的区间大概在[0.1, 1]。总的来看，p值较大，不应当拒绝方差相同的假设。分析p值不稳定的原因，应当是count5test这个统计量的取值是整数，每当原始x和y的统计量产生波动时，会对结果产生很大影响。
+
+
+# 2023/11/06
+
+## Question
+
+1.  考虑模型 $P(Y = 1 | X1, X2, X3) = \frac{exp(a+b1X1+b2X2+b3X3)}{1+exp(a+b1X1+b2X2+b3X3)}$ , 其中 $X1 ∼ P(1), X2 ∼ Exp(1), X3 ∼ B(1, 0.5)$.
+
+-   设计一个函数输入为 N, b1, b2, b3 和 f0, 输出为 a.
+-   调用函数, 输入的值为 N = 106, b1 = 0, b2 = 1, b3 = −1, f0 = 0.1, 0.01, 0.001, 0.0001.
+-   用 − log f0 vs a 画图.
+
+2.  Exercises 9.4 9.7 9.10 (pages 277-278, Statistical Computing with R).
+
+## Answer
+
+### 1
+
+定义的函数如下
+
+```{r}
+logistica <- function(N, b1, b2, b3, f0){ 
+  x1 <- rpois(N, 1) 
+  x2 <- rexp(N, 1)
+  x3 <- rbeta(N, 1, 0.5)
+  gg <- function(alpha){ # 内置函数
+    t <- exp(-alpha-b1*x1-b2*x2-b3*x3)
+    p <- 1/(1+t)
+    mean(p)-f0
+  }
+  result <- uniroot(gg, c(-20, 0)) # 使用uniroot求方程的根
+  return(result)
+}
+```
+
+下面调用上述函数，使用如下的输入值来计算a的值
+
+```{r}
+N = 1e6
+b1 = 0
+b2 = 1
+b3 = -1
+f0 = c(0.1, 0.01, 0.001, 0.0001)
+a = numeric(4) # 记录a的值
+for (i in 1:4){
+  a[i] = logistica(N, b1, b2, b3, f0[i])$root
+}
+
+table = data.frame(f0=f0, a=a)
+print(round(table, 4))
+```
+
+最终得到的a值如表格所示，下面绘制 −log f0 vs a的图
+
+```{r}
+plot(-log(f0), a, type="l")
+```
+
+可以看到−log f0 和 a的关系是线性的，a随−log f0增大而递减。
+
+### 9.4
+
+```{r}
+# laplace分布概率密度函数
+laplace <- function(x){
+  0.5*exp(-abs(x))
+}
+
+# random walk metropolis 采样
+rw.Metropolis <- function(sigma, x0, N) {
+  x <- numeric(N)
+  x[1] <- x0  # markov chain的第一个值
+  u <- runif(N)
+  k <- 0
+  for (i in 2:N) {
+    y <- rnorm(1, x[i-1], sigma)
+    if (u[i] <= (laplace(y) / laplace(x[i-1]))){ # 接受
+      x[i] <- y
+    } else { # 拒绝
+      x[i] <- x[i-1]
+      k <- k + 1
+    }
+  }
+  return(list(x=x, k=k))
+}
+
+N <- 2000 # 迭代步数
+sigma <- c(.05, .5, 2, 16) # 方差
+x0 <- 20 # markov chain的第一个值
+rw1 <- rw.Metropolis(sigma[1], x0, N)
+rw2 <- rw.Metropolis(sigma[2], x0, N)
+rw3 <- rw.Metropolis(sigma[3], x0, N)
+rw4 <- rw.Metropolis(sigma[4], x0, N)
+
+index = 1:2000
+par(mar = c(3, 3, 3, 3))
+par(mfrow=c(2,2))
+plot(index, rw1$x, type="l", xlab="sigma=.05", ylab="x")
+plot(index, rw2$x, type="l", xlab="sigma=.5", ylab="x")
+plot(index, rw3$x, type="l", xlab="sigma=2", ylab="x")
+plot(index, rw4$x, type="l", xlab="sigma=16", ylab="x")
+```
+
+上面分别是是$\sigma$取0.05,0.5, 2,16得到的Markov Chain的迭代值。可以看到，当$\sigma=0.05$时，Markov Chain收敛非常慢，在2000步内没有收敛。随着$\sigma$增大，收敛速度变快。但是当$\sigma=16$时，出现大量连续的重复值。
+
+下面计算各个$\sigma$取值下的接受率，
+
+```{r}
+accptance = numeric(4)
+accptance[1] <- 1-rw1$k/N
+accptance[2] <- 1-rw2$k/N
+accptance[3] <- 1-rw3$k/N
+accptance[4] <- 1-rw4$k/N
+table.accptance = data.frame(sigma = sigma, apptance.rate = accptance)
+table.accptance
+```
+
+可以看到，$\sigma$越大，接受率越低。
+
+### 9.7
+
+```{r}
+# 初始化参数
+N <- 5000 # markov chain的长度
+burn <- 1000 # burn-in 长度
+X <- matrix(0, N, 2) # 记录markov chain
+rho <- 0.9 # 相关系数
+mu1 <- 0 # 均值
+mu2 <- 0
+sigma1 <- 1 # 方差
+sigma2 <- 1
+s1 <- sqrt(1-rho^2)*sigma1 # 边缘分布的方差
+s2 <- sqrt(1-rho^2)*sigma2
+
+X[1, ] <- c(mu1, mu2) # 初始化
+for (i in 2:N) {
+  x2 <- X[i-1, 2]
+  m1 <- mu1 + rho * (x2 - mu2) * sigma1/sigma2
+  X[i, 1] <- rnorm(1, m1, s1)
+  x1 <- X[i, 1]
+  m2 <- mu2 + rho * (x1 - mu1) * sigma2/sigma1
+  X[i, 2] <- rnorm(1, m2, s2)
+}
+b <- burn + 1 
+x <- X[b:N, ] # 去除burn-in部分的markov chain
+```
+
+```{r}
+plot(x, main="", cex=.5, xlab=bquote(X), ylab=bquote(Y), ylim=range(x[,2]))
+```
+
+```{r}
+model <- lm(x[, 2]~x[, 1])
+summary(model)
+```
+
+
+```{r}
+shapiro.test(model$residuals)
+```
+在置信水平为0.05的情况下，不拒绝正态性假设，残差是服从正态分布的。
+
+```{r}
+se <- sd(model$residuals)
+se
+```
+
+残差的标准差为`r se`。
+
+### 9.10
+
+```{r}
+# 目标分布
+f <- function(x, sigma) {
+  if (any(x < 0)) { # 定义域x大于0
+    return (0)
+  }
+  stopifnot(sigma > 0) # sigma需要大于0
+  return((x / sigma^2) * exp(-x^2 / (2*sigma^2)))
+}
+
+# Gelman.Rubin方法
+Gelman.Rubin <- function(psi) {
+  psi <- as.matrix(psi) # psi是markov chain的统计量
+  n <- ncol(psi)
+  k <- nrow(psi)
+  psi.means <- rowMeans(psi) #行均值
+  B <- n * var(psi.means) #between variance est.
+  psi.w <- apply(psi, 1, "var") #within variances
+  W <- mean(psi.w) #within est.
+  v.hat <- W*(n-1)/n + (B/n) #方差的上界
+  r.hat <- v.hat / W #G-R 统计量
+  return(r.hat)
+}
+
+# 参数
+sigma <- .2 # 提议分布的参数
+k <- 4 #chain的数量
+b <- 1000 #burn-in长度
+
+#生成初始值
+set.seed(123)
+x0 <- rchisq(k, df=1)
+
+X <- matrix(x0) # 记录markov chain
+psi <- matrix(x0) # 记录统计量
+R.hat <- 2 # 初始化R.hat，使其大于1.2
+
+i = 2 # chain的长度
+while (R.hat >= 1.2) { # 循环直到R.hat大于1.2，实现了控制
+  xt <- X[, i-1]
+  y <- rchisq(k, df = xt)
+  r1 <- f(y, sigma) * dchisq(xt, df = y)
+  r2 <- f(xt, sigma) * dchisq(y, df = xt)
+  flag <- runif(4) <= r1/r2 # 这里flag用来表示时候接受提议分布
+  X <- cbind(X, flag*y+(1-flag)*xt) # 将拒绝或接受的值加入
+  psi <- cbind(psi, psi[, i-1]+(X[, i]-psi[, i-1])/i) # 更新统计量
+  R.hat <- Gelman.Rubin(psi)
+  i = i + 1
+}
+
+print(R.hat)
+
+n = ncol(psi)
+
+#画chain
+par(mar = c(3, 3, 3, 3))
+par(mfrow=c(2,2))
+for (i in 1:k)
+  plot(psi[i, (b+1):n], type="l", xlab=i, ylab=bquote(psi))
+par(mfrow=c(1,1)) #restore default
+
+#画R-hat statistics
+rhat <- rep(0, n)
+for (j in (b+1):n)
+  rhat[j] <- Gelman.Rubin(psi[,1:j])
+plot(rhat[(b+1):n], type="l", xlab="", ylab="R")
+abline(h=1.1, lty=2)
+
+```
+
+上面在$R.hat<1.2$时停止了迭代，下面使用coda包来检验生成的Markov Chain是否收敛。
+
+```{r}
+library(coda)
+
+mcmclist <- mcmc.list(mcmc(X[1, ]), mcmc(X[2, ]), mcmc(X[3, ]), mcmc(X[4, ]))
+gelman.diag(mcmclist)
+```
+
+可以看到点估计量为1，0.95的置信区间上界为1，可以认为Markov Chain已经收敛。
+
+```{r}
+gelman.plot(mcmclist)
+```
+
+# 2023/11/13
+
+## Question
+1.设$X_1, \ldots, X_n \overset{iid}{\sim}Exp(\lambda)$。因为某些原因，只知$X_i$落在某个区间$(u_i, v_i)$，其中$u_i < v_i$是两个非随机的已知常数。这种数据称为区间删失数据。
+
+(1)尝试分别直接极大化观测数据的似然函数与采用EM算法求解$\lambda$的MLE，证明EM算法收敛于观测数据的MLE，且收敛有线性速度。
+
+(2)设$(u_i, v_i),i = 1,\ldots,n(=10)$的观测值为$(11,12),(8,9),(27,28),(13,14),(16,17),(0,1),(23,24),(10,11),(24,25),(2,3)$。试分别编成实现上述两种算法以得到$\lambda$的MLE的数值解。
+
+提示：观测数据的似然函数为$L(\lambda)=\prod_{i=1}^{n}P_r(u_i \leq X_i \leq v_i)$ 。
+
+2.Exercises 11.8 (pages 354, Statistical Computing with R).
+
+## Answer
+
+### 1
+
+（1）
+
+MLE：
+
+似然函数为
+
+$$
+L(\lambda) = \prod_{i=1}^{n}P_{\lambda}( u_i \leq X_i \leq v_i)=\prod_{i=1}^{n}(e^{-\lambda u_i}-e^{-\lambda v_i}),
+$$
+
+对数似然函数为
+
+$$
+l(\lambda) = \sum_{i=1}^{n} \log(e^{-\lambda u_i}-e^{-\lambda v_i}).
+$$
+
+当满足
+
+$$
+\frac{\partial l(\lambda)}{\partial \lambda} = \sum_{i=1}^{n} \frac{-u_i e^{-\lambda u_i}+ v_i e^{-\lambda v_i}}{e^{-\lambda u_i}-e^{-\lambda v_i}}=0,
+$$
+
+此时的$\lambda ^*$为MLE。
+
+<br/>
+
+EM：
+
+变量$X_i$的观测值$x_i$是未知的，在观测值为$x_i$时的似然函数为
+
+$$
+L(\lambda|X_i) = \prod_{i=1}^{n} \lambda e^{-\lambda x_i}=\lambda^n \prod_{i=1}^{n} e^{-\lambda x_i}.
+$$
+
+对数似然函数为
+
+$$
+l(\lambda|X_i) = n \log{\lambda} - \lambda \sum_{i=1}^{n}x_i.
+$$
+
+在已知$u_i, v_i$的情况下
+
+$$
+\begin{aligned}
+E[X_i|u_i,v_i] &= \int_{u_i}^{v_i} x_i \frac{\lambda e^{-\lambda x_i}}{\int_{u_i}^{v_i}\lambda e^{-\lambda x_i}d x_i} d x_i \\
+&=   \frac{u_i e^{-\lambda u_i}- v_i e^{-\lambda v_i}}{e^{-\lambda u_i}-e^{-\lambda v_i}} + \frac{1}{\lambda}   .
+\end{aligned}
+
+
+$$
+
+E步：
+
+$$
+E_{\lambda_0}[l(\lambda|X_i) | u_i, v_i] = n \log \lambda -\lambda \sum_{i=1}^{n}E_{\lambda_0}[X_i|u_i,v_i].
+$$
+
+M步：
+
+$$
+\frac{\partial E_{\lambda_0}[l(\lambda|X_i) | u_i, v_i]}{\partial \lambda} = \frac{n}{\lambda} - \sum_{i=1}^{n}E_{\lambda_0}[X_i|u_i,v_i]=0.
+$$
+
+得到
+
+$$
+\lambda_1 = \frac{n}{\sum_{i=1}^{n}E_{\lambda_0}[X_i|u_i,v_i]},
+$$
+
+由此可以得到EM算法的迭代格式
+
+$$
+\lambda_{t+1} = \frac{1}{\frac{1}{n}\sum_{i=1}^{n}\frac{u_i e^{-\lambda_{t} u_i}- v_i e^{-\lambda_{t} v_i}}{e^{-\lambda_{t} u_i}-e^{-\lambda_{t} v_i}} + \frac{1}{\lambda_{t}}}.
+$$
+
+<br/>
+
+可以简单验证得到，当EM算法收敛时，将MEL $\lambda^*$带入EM算法，
+
+$$
+\frac{1}{\frac{1}{n}\sum_{i=1}^{n}\frac{u_i e^{-\lambda_* u_i}- v_i e^{-\lambda_* v_i}}{e^{-\lambda_* u_i}-e^{-\lambda_* v_i}} + \frac{1}{\lambda_*}} = \frac{1}{\frac{1}{\lambda^*}} =\lambda^* .
+$$
+
+因此EM算法收敛时的解就是MLE。
+
+下证EM算法的收敛性。
+
+<br/>
+
+证明.
+
+令迭代函数为
+
+$$
+f(\lambda) = \frac{1}{\frac{1}{n}\sum_{i=1}^{n}\frac{u_i e^{-\lambda u_i}- v_i e^{-\lambda v_i}}{e^{-\lambda u_i}-e^{-\lambda v_i}} + \frac{1}{\lambda}}.
+$$
+
+再令
+
+$$
+q(\lambda) = \sum_{i=1}^{n}\frac{u_i e^{-\lambda u_i}- v_i e^{-\lambda v_i}}{e^{-\lambda u_i}-e^{-\lambda v_i}}, \\
+q(\lambda^*) = 0.
+$$
+
+$\lambda^*$是$f(\lambda)$的一个不动点。
+
+下证$0 < f'(\lambda^*) < 1$。
+
+$$
+f'(\lambda) = -\frac{1}{(\frac{1}{n}q(\lambda)+\frac{1}{\lambda})^2}(\frac{1}{n}q'(\lambda)-\frac{1}{\lambda^2}),
+$$
+
+$$
+\begin{aligned}
+f'(\lambda^*)  &= 1-\frac{1}{n}\lambda^{*2}q'(\lambda^*)\\
+&=1- \frac{1}{n}\sum_{i=1}^n\frac{(u_i-v_i)^2\lambda^{*2}}{-2+e^{\lambda^*(v_i-u_i)}+e^{\lambda^*(u_i-v_i)}}.
+\end{aligned}
+$$
+
+令$d_i = (v_i - u_i)\lambda^* > 0$,
+
+$$
+f'(\lambda^*) = 1 - \frac{1}{n}\sum_{i =1}^n frac{d_i^2}{(e^{frac{d_i}{2}}-e^{-frac{d_i}{2}})^2},
+$$
+
+泰勒展开
+
+$$
+\begin{aligned}
+e^{frac{x}{2}}-e^{-frac{x}{2}} &= \sum_{n=0}^{\infty}\frac{x^n}{n!2^n} -\sum_{n=0}^{\infty}(-1)^n\frac{x^n}{n!2^n} \\
+&= x + \sum_{n=1}^{\infty}\frac{x^(2n+1)}{(2n+1)!2^{2n}}\\
+&> x,
+\end{aligned}
+$$
+
+因此 $0 < \frac{d_i^2}{(e^{frac{d_i}{2}}-e^{-frac{d_i}{2}})^2} < 1$，带入f'(\lambda^*)可以简单验证得到，当EM算法收敛时，将MEL
+
+$$
+0 < f'(\lambda^*) < 1,
+$$
+
+因此$f(\lambda)$线性收敛于$\lambda^*$。
+
+（2）
+
+先使用极大似然法
+
+```{r}
+u <- c(11, 8, 27, 13, 16, 0, 23, 10, 24, 2)
+v <- c(12, 9, 28, 14, 17, 1, 24, 11, 25, 3)
+mlogL <- function(lambda) {
+    # minus log-likelihood
+    return(sum(log(exp(-lambda*u)-exp(-lambda*v))))
+}
+
+res <- optimize(mlogL, lower=0, upper=10, maximum=TRUE)
+res$maximum
+```
+
+接下来使用EM算法
+
+```{r}
+u <- c(11, 8, 27, 13, 16, 0, 23, 10, 24, 2)
+v <- c(12, 9, 28, 14, 17, 1, 24, 11, 25, 3)
+
+# EM算法的迭代函数
+f <- function(lambda) {
+    1/mean(((-v-1/lambda)*exp(-lambda*v)+(u+1/lambda)*exp(-lambda*u))/(exp(-lambda*u)-exp(-lambda*v)))
+}
+
+loss <- 1 # 前后两次迭代的差
+t <- 1 # 迭代次数
+
+lambda <- 0.1
+while (t<1000 & loss>1e-8) { # 迭代次数大于1000或误差小于1e-8时停止迭代
+    lambda1 <- lambda
+    lambda <- f(lambda)
+    loss <- abs(lambda - lambda1)
+    t = t + 1
+}
+lambda
+```
+
+可以看到，两种方法得到的结果十分相近。
+
+### 2
+
+```{r}
+solve.game <- function(A) {
+    #solve the two player zero-sum game by simplex method
+    #optimize for player 1, then player 2
+    #maximize v subject to ...
+    #let x strategies 1:m, and put v as extra variable
+    #A1, the <= constraints
+    #
+    min.A <- min(A)
+    A <- A - min.A #so that v >= 0
+    max.A <- max(A)
+    A <- A / max(A)
+    m <- nrow(A)
+    n <- ncol(A)
+    it <- n^3
+    a <- c(rep(0, m), 1) #objective function
+    A1 <- -cbind(t(A), rep(-1, n)) #constraints <=
+    b1 <- rep(0, n)
+    A3 <- t(as.matrix(c(rep(1, m), 0))) #constraints sum(x)=1
+    b3 <- 1
+    sx <- simplex(a=a, A1=A1, b1=b1, A3=A3, b3=b3,
+        maxi=TRUE, n.iter=it)
+    #the ’solution’ is [x1,x2,...,xm | value of game]
+    #
+    #minimize v subject to ...
+    #let y strategies 1:n, with v as extra variable
+    a <- c(rep(0, n), 1) #objective function
+    A1 <- cbind(A, rep(-1, m)) #constraints <=
+    b1 <- rep(0, m)
+    A3 <- t(as.matrix(c(rep(1, n), 0))) #constraints sum(y)=1
+    b3 <- 1
+    sy <- simplex(a=a, A1=A1, b1=b1, A3=A3, b3=b3,
+        maxi=FALSE, n.iter=it)
+    soln <- list("A" = A * max.A + min.A,
+        "x" = sx$soln[1:m],
+        "y" = sy$soln[1:n],
+        "v" = sx$soln[m+1] * max.A + min.A)
+    soln
+}
+```
+
+```{r}
+#enter the payoff matrix
+A <- matrix(c(  0,-2,-2,3,0,0,4,0,0,
+                2,0,0,0,-3,-3,4,0,0,
+                2,0,0,3,0,0,0,-4,-4,
+                -3,0,-3,0,4,0,0,5,0,
+                0,3,0,-4,0,-4,0,5,0,
+                0,3,0,0,4,0,-5,0,-5,
+                -4,-4,0,0,0,5,0,0,6,
+                0,0,4,-5,-5,0,0,0,6,
+                0,0,4,0,0,5,-6,-6,0), 9, 9)
+library(boot) #needed for simplex function
+s <- solve.game(A)
+```
+
+```{r}
+round(cbind(s$x, s$y), 7)
+```
+
+```{r}
+B <- A + 2
+s1 <- solve.game(B)
+round(cbind(s1$x, s1$y), 7)
+```
+
+可以看到，游戏A和游戏B得到的最有策略是一样的，都是（11.12）$(0, 0, 5/12, 0, 4/12, 0, 3/12, 0, 0)$。
+
+```{r}
+cat("A: ", s$v)
+cat("B: ", s1$v)
+```
+
+游戏A的价值是0，游戏2的价值是2。
+
+# 2023/11/20
+
+---
+title: "Homework-2023.11.13"
+author: "By SA23229026"
+date: "2023/11/13"
+output: html_document
+---
+
+## Question
+1.
+- 2.1.3 Exercise 4 (Pages 19 Advanced in R)
+- 2.3.1 Exercise 1, 2 (Pages 26 Advanced in R)
+- 2.4.5 Exercise 2, 3 (Pages 30 Advanced in R)
+- Exercises 2 (page 204, Advanced R)
+- Exercises 1 (page 213, Advanced R)
+
+2. Consider Exercise 9.8 (pages 278, Statistical Computing with R). (Hint: Refer to the first example of
+Case studies section)
+- Write an R function.
+- Write an Rcpp function.
+- Compare the computation time of the two functions with the function “microbenchmark”
+
+## Answer
+
+### 2.1.3 Exercise 4
+
+`unlist()`可以将列表展平成为向量；`as.vector()`不会将列表展平，当列表有嵌套结构时，`as.vector()`可能无法产生期望的结果。
+```{r}
+x <- list(a = 1, b = list(c = 2, d = 3))
+unlist(x)
+as.vector(x)
+```
+
+
+
+### 2.3.1 Exercise 1
+
+将会返回NULL，向量没有维度概念。
+```{r}
+a <- c(1, 2, 3)
+dim(a)
+```
+
+### 2.3.1 Exercise 2
+
+`is.array(x)`的结果也是TRUE，因为matrix是始终特殊的array。
+
+```{r}
+x <- matrix(data = 1:6, nrow = 2, ncol = 3)
+is.matrix(x)
+is.array(x)
+```
+
+
+### 2.4.5 Exercise 2
+
+`as.matrix()`会将所有数据转换为同一类型，转换结果遵循R中的规则。
+
+```{r}
+x <- data.frame(
+    numeric_col = c(1, 2, 3),
+    character_col = c("a", "b", "c"),
+    logical_col = c(TRUE, FALSE, TRUE)
+)
+
+as.matrix(x)
+```
+
+### 2.4.5 Exercise 3
+
+0行的dataframe可以实现。
+
+```{r}
+x1 <- data.frame(matrix(nrow = 0, ncol = 3))
+x1
+```
+
+
+0列的dataframe也可以实现。
+```{r}
+x2 <- data.frame(matrix(nrow = 3, ncol = 0))
+x2
+```
+
+
+### Exercises 2（204）
+
+运用到所有列。
+
+```{r}
+scale01 <- function(x) {
+    rng <- range(x, na.rm = TRUE)
+    (x - rng[1]) / (rng[2] - rng[1])
+}
+
+x <- data.frame(
+    a = 1:3,
+    b = 7:9,
+    c = 4:6
+)
+
+lapply(x, scale01)
+```
+
+
+运用到数值列。
+
+```{r}
+y <- data.frame(
+    a = 1:3,
+    b = c('q', 'w', 'e'),
+    c = 4:6
+)
+
+lapply(y, function(x) {if (is.numeric(x)) scale01(x) else x})
+```
+
+### Exercises 1（213）
+
+运用到所有列。
+
+```{r}
+x <- data.frame(
+    a = 1:3,
+    b = 7:9,
+    c = 4:6
+)
+
+vapply(x, sd, numeric(1))
+```
+
+运用到数值列。
+
+```{r}
+y <- data.frame(
+    a = 1:3,
+    b = c('q', 'w', 'e'),
+    c = 4:6
+)
+
+vapply(y[vapply(y, is.numeric, logical(1))], sd, numeric(1))
+```
+
+
+### Exercise 9.8
+
+R function
+
+```{r}
+#initialize constants and parameters
+N <- 50000 #length of chain
+burn <- 1000 #burn-in length
+
+n <- 10
+a <- 2
+b <- 3
+
+gibbsR <- function(N, burn, n, a, b){
+    x1 <- 3
+    y1 <- 0.5
+    X <- matrix(0, N, 2) #the chain, a bivariate sample
+    X[1, ] <- c(x1, y1)
+
+    for (i in 2:N) {
+        yt <- X[i-1, 2]
+        X[i, 1] <- rbinom(1, n, yt)
+        xt <- X[i, 1]
+        X[i, 2] <- rbeta(1, xt + a, n - xt + b)
+    }
+    X
+}
+```
+
+```{r}
+library(Rcpp)
+library(microbenchmark)
+
+# dir_cpp <- "./"
+# sourceCpp(paste0(dir_cpp, "gibbsC.cpp"))
+
+cppFunction('NumericMatrix gibbsC(int N, int burn, int n, int a, int b) {
+    int x1 = 3;
+    double y1 = 0.5;
+    NumericMatrix X(N, 2);
+    X(0, 0) = x1;
+    X(0, 1) = y1;
+
+    int xt = x1;
+    double yt = y1;
+    for (int i = 1; i < N; i++) {
+        yt = X(i-1, 1);
+        X(i, 0) = R::rbinom(n, yt);
+        xt = X(i, 0);
+        X(i, 1) = R::rbeta(xt + a, n - xt + b);
+    }
+
+    return X;
+}')
+
+ts <- microbenchmark(gibbsR=gibbsR(N, burn, n, a, b), gibbsC=gibbsC(N, burn, n, a, b))
+summary(ts)[,c(1,3,5,6)]
+```
+
+可以看到使用Rcpp的运行时间比直接使用R function的时间短很多。

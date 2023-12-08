@@ -1,0 +1,62 @@
+---
+title: "Introduction to this package"
+author: "Li Feng"
+date: "2023/12/8"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to this package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Overview
+
+This package implements two classic machine learning algorithms, PageRank and Kmeans. pageRank is a classic algorithm used to compute the ranking of Internet web pages, and this package provides the R function implementation of PageRank _pagerankr_, and the Rcpp implementation _pagerankc_, the following will use the R package 'microbenchmark' to compare the efficiency of the two implementations. Kmeans is a widely used clustering algorithm, this package provides its R function _kmeans_, we will try to call _kmeans_ in this package to perform clustering.
+
+## PangeRank
+
+To use the functions _pagerankr_ and _pagerankc_ provided in this package, an adjacency matrix must be provided. Here is an example of this simple adjacency matrix
+
+```{r}
+adj_matrix <- matrix(c(1, 0, 0, 0, 
+                      0, 1, 0, 0, 
+                      0, 0, 1, 0, 
+                      1, 1, 1, 1), 
+                    nrow = 4, byrow=TRUE)
+```
+
+Using the default arguments _alpha_ and _max_iter_ , you can get
+
+```{r}
+library(SA23229026)
+pagerankr(adj_matrix)
+pagerankc(adj_matrix)
+```
+
+The following uses 'microbenchmark' to compare efficiency
+
+```{r}
+library(microbenchmark)
+ts <- microbenchmark(pagerankR=pagerankr(adj_matrix), pagerankc=pagerankc(adj_matrix))
+summary(ts)[,c(1,3,5,6)]
+```
+
+As you can see, _pagerankc_ is much more efficient than _pagerankr_.
+
+## Kmeans
+
+Start by generating some random points
+
+```{r}
+set.seed(123)
+data <- matrix(c(rnorm(30, 0, 0.2), rnorm(30, 2, 0.2), rnorm(30, 2, 0.2), 
+                 rnorm(30, 0, 0.2), rnorm(30, 0, 0.2), rnorm(30, 2, 0.2)), ncol = 2)
+plot(data)
+```
+
+Clustering using the _kmeans_ function in the package yields the following cluster centers and categories for each point
+
+```{r}
+result <- kmeans(data, 3)
+result
+```
